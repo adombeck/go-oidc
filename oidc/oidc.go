@@ -98,16 +98,16 @@ func doRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
 
 // Provider represents an OpenID Connect server's configuration.
 type Provider struct {
-	issuer      string
-	authURL     string
-	tokenURL    string
-	userInfoURL string
-	algorithms  []string
+	Issuer      string
+	AuthURL     string
+	TokenURL    string
+	UserInfoURL string
+	Algorithms  []string
+
+	RemoteKeySet KeySet
 
 	// Raw claims returned by the server.
 	rawClaims []byte
-
-	remoteKeySet KeySet
 }
 
 type providerJSON struct {
@@ -179,13 +179,13 @@ func NewProvider(ctx context.Context, issuer string) (*Provider, error) {
 		}
 	}
 	return &Provider{
-		issuer:       issuerURL,
-		authURL:      p.AuthURL,
-		tokenURL:     p.TokenURL,
-		userInfoURL:  p.UserInfoURL,
-		algorithms:   algs,
+		Issuer:       issuerURL,
+		AuthURL:      p.AuthURL,
+		TokenURL:     p.TokenURL,
+		UserInfoURL:  p.UserInfoURL,
+		Algorithms:   algs,
 		rawClaims:    body,
-		remoteKeySet: NewRemoteKeySet(cloneContext(ctx), p.JWKSURL),
+		RemoteKeySet: NewRemoteKeySet(cloneContext(ctx), p.JWKSURL),
 	}, nil
 }
 
@@ -211,7 +211,7 @@ func (p *Provider) Claims(v interface{}) error {
 
 // Endpoint returns the OAuth2 auth and token endpoints for the given provider.
 func (p *Provider) Endpoint() oauth2.Endpoint {
-	return oauth2.Endpoint{AuthURL: p.authURL, TokenURL: p.tokenURL}
+	return oauth2.Endpoint{AuthURL: p.AuthURL, TokenURL: p.TokenURL}
 }
 
 // UserInfo represents the OpenID Connect userinfo claims.
@@ -244,11 +244,11 @@ func (u *UserInfo) Claims(v interface{}) error {
 
 // UserInfo uses the token source to query the provider's user info endpoint.
 func (p *Provider) UserInfo(ctx context.Context, tokenSource oauth2.TokenSource) (*UserInfo, error) {
-	if p.userInfoURL == "" {
+	if p.UserInfoURL == "" {
 		return nil, errors.New("oidc: user info endpoint is not supported by this provider")
 	}
 
-	req, err := http.NewRequest("GET", p.userInfoURL, nil)
+	req, err := http.NewRequest("GET", p.UserInfoURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("oidc: create GET request: %v", err)
 	}
@@ -275,7 +275,7 @@ func (p *Provider) UserInfo(ctx context.Context, tokenSource oauth2.TokenSource)
 	ct := resp.Header.Get("Content-Type")
 	mediaType, _, parseErr := mime.ParseMediaType(ct)
 	if parseErr == nil && mediaType == "application/jwt" {
-		payload, err := p.remoteKeySet.VerifySignature(ctx, string(body))
+		payload, err := p.RemoteKeySet.VerifySignature(ctx, string(body))
 		if err != nil {
 			return nil, fmt.Errorf("oidc: invalid userinfo jwt signature %v", err)
 		}
